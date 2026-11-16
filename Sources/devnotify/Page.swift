@@ -38,8 +38,8 @@ summary::before { content: "▸ " }
 details[open] summary::before { content: "▾ " }
 pre { max-height: 240px; overflow: auto; background: var(--well); color: var(--fg); border-radius: 8px; padding: 8px;
   font: 11px ui-monospace, Menlo; white-space: pre-wrap; margin: 6px 0 0; -webkit-user-select: text }
-/* Buttons on the left; the free reply hides behind a button and slides open to the right, taking the
-   rest of the row (or a row of its own when too narrow). */
+/* Buttons on the left; the free reply hides behind an icon button at the right end of the row and
+   slides open leftwards into a field taking the rest of the row (or a row of its own when too narrow). */
 .respond { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 8px 0 0 16px }
 button { background: var(--btn); color: var(--fg); border: 1px solid var(--btn-line); border-radius: 7px;
   padding: 4px 10px; font: 500 12px -apple-system; cursor: pointer }
@@ -53,8 +53,9 @@ button.busy { opacity: .55; cursor: progress }
 .reply .send { position: absolute; right: 3px; top: 50%; transform: translateY(-50%); padding: 1px 7px; border: none;
   border-radius: 5px; background: var(--accent); color: #fff; font-size: 11px }
 .reply input:placeholder-shown + .send { opacity: .35; pointer-events: none }
+.open-reply { margin-left: auto; padding: 3px 8px; display: flex; align-items: center; color: var(--fg2) }
 .reply.opening { animation: open-reply .22s cubic-bezier(.2,.9,.3,1) }
-@keyframes open-reply { from { clip-path: inset(0 calc(100% - 84px) 0 0 round 7px) } to { clip-path: inset(0 0 0 0 round 7px) } }
+@keyframes open-reply { from { clip-path: inset(0 0 0 calc(100% - 32px) round 7px) } to { clip-path: inset(0 0 0 0 round 7px) } }
 @media (prefers-reduced-motion: reduce) { .reply.opening { animation: none } }
 .error { margin: 8px 0 0 16px; padding: 6px 8px; border-radius: 7px; background: var(--err-bg); color: var(--ko);
   font-size: 12px; -webkit-user-select: text }
@@ -113,7 +114,7 @@ function render(cards) {
         ${!reply ? "" : isReplyOpen(c, reply)
           ? `<div class="reply"><input placeholder="${esc(reply.placeholder || "Répondre…")}" value="${esc(drafts[c.key] ?? "")}">
             <button class="send" data-reply title="${esc(reply.label || "Envoyer")}">↵</button></div>`
-          : `<button data-open-reply title="Répondre en texte libre">Répondre…</button>`}
+          : `<button class="open-reply" data-open-reply title="Répondre en texte libre" aria-label="Répondre"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M2.5 3h11a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H8l-3.5 2.5V11h-2a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/></svg></button>`}
       </div>` : ""}
       ${err ? `<div class="error">${esc(err)}</div>` : ""}
     </div>`; }).join("");
