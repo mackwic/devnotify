@@ -38,7 +38,8 @@ summary::before { content: "▸ " }
 details[open] summary::before { content: "▾ " }
 pre { max-height: 240px; overflow: auto; background: var(--well); color: var(--fg); border-radius: 8px; padding: 8px;
   font: 11px ui-monospace, Menlo; white-space: pre-wrap; margin: 6px 0 0; -webkit-user-select: text }
-/* Buttons on the left, the free reply takes the rest of the row (and its own row when too narrow). */
+/* Buttons on the left; the free reply hides behind a button and slides open to the right, taking the
+   rest of the row (or a row of its own when too narrow). */
 .respond { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 8px 0 0 16px }
 button { background: var(--btn); color: var(--fg); border: 1px solid var(--btn-line); border-radius: 7px;
   padding: 4px 10px; font: 500 12px -apple-system; cursor: pointer }
@@ -52,6 +53,9 @@ button.busy { opacity: .55; cursor: progress }
 .reply .send { position: absolute; right: 3px; top: 50%; transform: translateY(-50%); padding: 1px 7px; border: none;
   border-radius: 5px; background: var(--accent); color: #fff; font-size: 11px }
 .reply input:placeholder-shown + .send { opacity: .35; pointer-events: none }
+.reply.opening { animation: open-reply .22s cubic-bezier(.2,.9,.3,1) }
+@keyframes open-reply { from { clip-path: inset(0 calc(100% - 84px) 0 0 round 7px) } to { clip-path: inset(0 0 0 0 round 7px) } }
+@media (prefers-reduced-motion: reduce) { .reply.opening { animation: none } }
 .error { margin: 8px 0 0 16px; padding: 6px 8px; border-radius: 7px; background: var(--err-bg); color: var(--ko);
   font-size: 12px; -webkit-user-select: text }
 </style></head><body><div id="stack"></div><script nonce="dn">
@@ -76,14 +80,21 @@ const srcLine = c => (c.source ? esc(c.source) + " · " : "") + ago(c.time);
 // A card version is its key and its post time: a re-post (same key) starts clean.
 const version = c => c.key + "@" + c.time;
 let last = [];
+// Whether a card's reply field is open, when the person opened or closed it; otherwise it is open
+// when it holds a draft, when the card has no button, or when the card asks for it (`reply.open`).
+const replyOpen = {};
+const isReplyOpen = (c, reply) => replyOpen[c.key] ?? (Boolean(drafts[c.key]) || !(c.actions || []).length || reply.open === true);
+let rendering = false;
 function render(cards) {
   last = cards;
   const keys = new Set(cards.map(c => c.key));
   for (const k of Object.keys(drafts)) if (!keys.has(k)) delete drafts[k];
+  for (const k of Object.keys(replyOpen)) if (!keys.has(k)) delete replyOpen[k];
   // Re-rendering replaces the inputs: keep the one being typed in focused, caret included.
   const f = document.activeElement, typing = f?.matches?.(".reply input") ? f.closest(".card").dataset.key : null;
   const caret = typing ? [f.selectionStart, f.selectionEnd] : null;
   const stack = document.getElementById("stack");
+  rendering = true;
   stack.innerHTML = cards.map(c => {
     const isNew = !seen.has(c.key); seen.add(c.key);
     const hasDetails = c.details != null || c.detailsCommand;
@@ -99,8 +110,10 @@ function render(cards) {
         <pre>${esc(loaded[c.key] ?? c.details ?? "chargement…")}</pre></details>` : ""}
       ${actions.length || reply ? `<div class="respond">
         ${actions.map((a, i) => `<button class="${i === 0 ? "primary" : ""}" data-act="${i}">${esc(a.label)}</button>`).join("")}
-        ${reply ? `<div class="reply"><input placeholder="${esc(reply.placeholder || "Répondre…")}" value="${esc(drafts[c.key] ?? "")}">
-          <button class="send" data-reply title="${esc(reply.label || "Envoyer")}">↵</button></div>` : ""}
+        ${!reply ? "" : isReplyOpen(c, reply)
+          ? `<div class="reply"><input placeholder="${esc(reply.placeholder || "Répondre…")}" value="${esc(drafts[c.key] ?? "")}">
+            <button class="send" data-reply title="${esc(reply.label || "Envoyer")}">↵</button></div>`
+          : `<button data-open-reply title="Répondre en texte libre">Répondre…</button>`}
       </div>` : ""}
       ${err ? `<div class="error">${esc(err)}</div>` : ""}
     </div>`; }).join("");
@@ -110,6 +123,7 @@ function render(cards) {
   });
   const input = typing && cardEl(typing)?.querySelector(".reply input");
   if (input) { input.focus(); input.setSelectionRange(...caret); }
+  rendering = false;
 }
 function cardEl(key) { return [...document.querySelectorAll(".card")].find(c => c.dataset.key === key); }
 function setDetails(key, text) {
@@ -125,7 +139,7 @@ function actionDone(key, ok, text, isReply) {
   if (!ok) { msg = text.trim() || "La commande a échoué.";
     try { msg = JSON.parse(msg).error ?? msg } catch {}
     msg = "Échec : " + msg.slice(0, 300); }
-  else if (isReply) delete drafts[key];
+  else if (isReply) { delete drafts[key]; delete replyOpen[key]; }
   errors[version(c)] = msg;
   render(last);
 }
@@ -134,6 +148,16 @@ function sendReply(card) {
   if (!text || input.disabled) return;
   input.disabled = true;
   post({ type: "reply", key: card.dataset.key, text });
+}
+function setReplyOpen(card, open) {
+  const key = card.dataset.key;
+  replyOpen[key] = open;
+  render(last);
+  if (!open) return;
+  const input = cardEl(key)?.querySelector(".reply input"); if (!input) return;
+  input.closest(".reply").classList.add("opening");
+  post({ type: "focus" });  // the panel takes the keyboard (without activating the app)
+  input.focus();
 }
 new ResizeObserver(() => post({ type: "size", h: document.getElementById("stack").scrollHeight }))
   .observe(document.getElementById("stack"));
@@ -145,12 +169,21 @@ document.addEventListener("click", e => {
   const a = find("[data-act]");
   if (a && !a.classList.contains("busy")) { a.classList.add("busy"); post({ type: "action", key, index: +a.dataset.act }); }
   if (find("[data-reply]")) sendReply(card);
+  if (find("[data-open-reply]")) setReplyOpen(card, true);
 });
 document.addEventListener("input", e => {
   if (e.target.matches(".reply input")) drafts[e.target.closest(".card").dataset.key] = e.target.value;
 });
 document.addEventListener("keydown", e => {
-  if (e.key === "Enter" && e.target.matches(".reply input")) sendReply(e.target.closest(".card"));
+  if (!e.target.matches(".reply input")) return;
+  if (e.key === "Enter") sendReply(e.target.closest(".card"));
+  if (e.key === "Escape") setReplyOpen(e.target.closest(".card"), false);
+});
+// Leaving an empty field folds it back behind its button (a card without buttons keeps it).
+document.addEventListener("focusout", e => {
+  if (rendering || !e.target.matches(".reply input") || e.target.value.trim()) return;
+  const card = e.target.closest(".card"), c = last.find(c => c.key === card.dataset.key);
+  if (c && (c.actions || []).length) setTimeout(() => setReplyOpen(card, false));
 });
 document.addEventListener("toggle", e => {
   if (e.target.tagName !== "DETAILS" || !e.target.closest(".card")) return;

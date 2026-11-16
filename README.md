@@ -44,7 +44,7 @@ devnotify ask '{"title": "Apply the migration?", "actions": [{"label": "Yes"}, {
 | `detailsCommand` | argv run each time the details unfold; its output replaces `details`. |
 | `detailsLabel` | The fold's label (default "Détails"). |
 | `actions` | Buttons, see below. The first one is the primary button. |
-| `reply` | A free-text field right of the buttons: `{argv, placeholder, label, keep}`; `{text}` in `argv` is replaced by the reply. An `ask` card always has one (`"reply": false` removes it); its reply is the answer. |
+| `reply` | A free-text reply right of the buttons: `{argv, placeholder, label, keep, open}`; `{text}` in `argv` is replaced by the reply. It folds behind a "Répondre…" button that slides open into a field; it starts open when the card has no button or says `"open": true`, and folds back on Esc or when left empty. An `ask` card always has one (`"reply": false` removes it); its reply is the answer. |
 
 An action is `{label, argv?, url?, activate?, keep?}`: it runs `argv`, opens `url`, then brings the
 app with bundle id `activate` forward. The card goes away once the command succeeded, unless `keep`;

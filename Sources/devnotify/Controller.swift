@@ -129,6 +129,10 @@ final class Controller: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
 
     func userContentController(_ ucc: WKUserContentController, didReceive message: WKScriptMessage) {
         guard let m = message.body as? [String: Any], let type = m["type"] as? String else { return }
+        if type == "focus" {
+            panel.makeKey()
+            return
+        }
         if type == "size", let h = m["h"] as? Double {
             contentHeight = CGFloat(h)
             layoutPanel()
