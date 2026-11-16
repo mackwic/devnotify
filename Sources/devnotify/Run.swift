@@ -2,8 +2,9 @@ import AppKit
 
 /// Runs `argv` and reports its exit status and combined output on the main queue.
 /// The PATH also holds ~/.local/bin and Homebrew: a server started at login has a bare one.
-func run(_ argv: [String], completion: ((Int32, String) -> Void)? = nil) {
-    guard !argv.isEmpty else { completion?(0, ""); return }
+@discardableResult
+func run(_ argv: [String], completion: ((Int32, String) -> Void)? = nil) -> Process? {
+    guard !argv.isEmpty else { completion?(0, ""); return nil }
     let p = Process()
     p.executableURL = URL(fileURLWithPath: "/usr/bin/env")
     p.arguments = argv
@@ -17,7 +18,8 @@ func run(_ argv: [String], completion: ((Int32, String) -> Void)? = nil) {
         let text = String(decoding: out.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
         DispatchQueue.main.async { completion?(proc.terminationStatus, text) }
     }
-    do { try p.run() } catch { completion?(127, "devnotify: \(error.localizedDescription)") }
+    do { try p.run() } catch { completion?(127, "devnotify: \(error.localizedDescription)"); return nil }
+    return p
 }
 
 /// A JS literal for any JSON value, strings included.

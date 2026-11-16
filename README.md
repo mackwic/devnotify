@@ -45,6 +45,7 @@ devnotify ask '{"title": "Apply the migration?", "actions": [{"label": "Yes"}, {
 | `detailsLabel` | The fold's label (default "Détails"). |
 | `actions` | Buttons, see below. The first one is the primary button. |
 | `reply` | A free-text reply right of the buttons: `{argv, placeholder, label, keep, open}`; `{text}` in `argv` is replaced by the reply. It folds behind a "Répondre…" button that slides open into a field; it starts open when the card has no button or says `"open": true`, and folds back on Esc or when left empty. An `ask` card always has one (`"reply": false` removes it); its reply is the answer. |
+| `until` | argv started with the card; the card goes away when it exits (an `ask` answers `{"closed": "resolved"}`). |
 
 An action is `{label, argv?, url?, activate?, keep?}`: it runs `argv`, opens `url`, then brings the
 app with bundle id `activate` forward. The card goes away once the command succeeded, unless `keep`;
@@ -76,3 +77,10 @@ opaque, for contrast.
 A Unix socket at `$TMPDIR/devnotify/sock` (`DEVNOTIFY_DIR` overrides the folder), in a `0700` folder;
 the server also checks that the peer is the same user. One JSON object per line. A message with
 `"wait": true` keeps its connection open and receives one JSON line, the answer.
+
+## Herdr
+
+`make herdr` installs `devnotify-herdr-until` and the `my-toast` mod (`~/.config/herdr-app/mods/my-toast`):
+Herdr's notifications become cards that go to the agent or peek at it, unfold into its last terminal
+lines, send a free reply with `hc send`, and go away once the agent is dealt with (looked at, new turn,
+unblocked or ended). Without devnotify, the mod falls back to terminal-notifier, then to the in-window toast.

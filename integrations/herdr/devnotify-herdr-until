@@ -1,0 +1,19 @@
+#!/bin/sh
+# devnotify-herdr-until <terminal>: a card's `until` for a Herdr agent. Exits once the person has dealt
+# with the agent the card is about: the terminal ended, a new turn started, a blocked agent got
+# unblocked, or a finished one was looked at (Herdr's `herdr.seen` label caught up with its turn).
+t=$1
+state() { hc get "$t" --json 2>/dev/null; }
+start=$(state) || exit 0
+turn0=$(printf '%s' "$start" | jq -r '.turn')
+blocked=$(printf '%s' "$start" | jq -r '.status.state == "blocked"')
+while sleep 2; do
+  state | jq -e --argjson turn0 "$turn0" --argjson blocked "$blocked" '
+    .state != "live" or .turn > $turn0
+    or (if $blocked then .status.state != "blocked"
+        else ((.labels["herdr.seen"] // "0") | tonumber) >= $turn0 end)' >/dev/null
+  case $? in
+    1) ;;         # still waiting on the person
+    *) exit 0 ;;  # dealt with, or the terminal is gone
+  esac
+done

@@ -16,6 +16,8 @@ final class Controller: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
     private var cards: [[String: Any]] = []  // newest first
     /// `ask` callers, by card key: answered when the person acts on their card.
     private var waiters: [String: Client] = [:]
+    /// `until` commands, by card key: the card goes away when its command exits.
+    private var watchers: [String: Process] = [:]
     private var hidden = false
     private var pageReady = false
     private let width: CGFloat = 400
@@ -66,6 +68,7 @@ final class Controller: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
         }
         let removing = msg["remove"] as? Bool == true
         settle(key, ["closed": removing ? "removed" : "replaced"])
+        unwatch(key)
         cards.removeAll { $0["key"] as? String == key }
         if !removing {
             var card = msg
@@ -81,6 +84,16 @@ final class Controller: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
                 }
             }
             cards.insert(card, at: 0)
+            if let argv = card["until"] as? [String], !argv.isEmpty {
+                var watcher: Process?
+                watcher = run(argv) { [weak self] _, _ in
+                    guard let self, let watcher, self.watchers[key] === watcher else { return }
+                    self.watchers[key] = nil
+                    self.settle(key, ["closed": "resolved"])
+                    self.drop(key)
+                }
+                watchers[key] = watcher
+            }
             hidden = false
         }
         render()
@@ -92,8 +105,14 @@ final class Controller: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
     }
 
     private func drop(_ key: String) {
+        unwatch(key)
         cards.removeAll { $0["key"] as? String == key }
         render()
+    }
+
+    /// Stops the card's `until` command, if it still runs.
+    private func unwatch(_ key: String) {
+        watchers.removeValue(forKey: key)?.terminate()
     }
 
     private func render() {
@@ -231,6 +250,7 @@ final class Controller: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
     @objc private func toggleCards() { hidden.toggle(); render() }
     @objc private func clearAll() {
         for key in Array(waiters.keys) { settle(key, ["closed": "dismissed"]) }
+        for key in Array(watchers.keys) { unwatch(key) }
         cards.removeAll()
         render()
     }
