@@ -15,8 +15,8 @@ let pageHTML = #"""
   --ok: #3fd16b; --ko: #ff6b6b; --warn: #ffb340; --info: #5aa9ff; --err-bg: rgba(255,90,90,.14) } }
 html, body { margin: 0; background: transparent; font: 13px -apple-system, system-ui; color: var(--fg);
   -webkit-user-select: none; overflow: hidden }
-#stack { display: flex; flex-direction: column; gap: 8px; padding: 6px 6px 12px }
-.card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; box-shadow: var(--shadow) }
+#stack { display: flex; flex-direction: column; gap: 10px; padding: 10px 6px 12px 10px }
+.card { position: relative; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; box-shadow: var(--shadow) }
 .card.new { animation: in .28s cubic-bezier(.2,.9,.3,1.2) }
 @keyframes in { from { opacity: 0; transform: translateX(30px) } to { opacity: 1; transform: none } }
 @keyframes fade { from { opacity: 0 } }
@@ -27,8 +27,12 @@ html, body { margin: 0; background: transparent; font: 13px -apple-system, syste
 @media (prefers-reduced-motion: reduce) { .card.new { animation: fade .15s } .dot.pulse { animation: none } }
 .title { font-weight: 600; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
 .src { color: var(--fg3); font-size: 11px; white-space: nowrap }
-.x { color: var(--fg3); cursor: pointer; padding: 0 2px }
-.x:hover { color: var(--fg) }
+/* Close as on macOS notifications: a small round button over the top left corner, shown on hover. */
+.x { position: absolute; top: -7px; left: -7px; width: 18px; height: 18px; padding: 0; border-radius: 9px;
+  display: flex; align-items: center; justify-content: center; background: var(--card); color: var(--fg2);
+  border: 1px solid var(--line); box-shadow: 0 1px 4px rgba(0,0,0,.18); opacity: 0; transition: opacity .12s }
+.card:hover .x, .x:focus-visible { opacity: 1 }
+.x:hover { color: var(--fg); filter: none; background: var(--btn) }
 .body { color: var(--fg2); margin: 4px 0 0 16px }
 .custom { display: block; margin: 6px 0 0 16px }
 details { margin: 6px 0 0 16px }
@@ -103,8 +107,8 @@ function render(cards) {
     const err = errors[version(c)];
     return `<div class="card ${isNew ? "new" : ""}" data-key="${esc(c.key)}">
       <div class="head"><span class="dot ${c.level === "warning" ? "pulse" : ""}" style="background:${DOT[c.level] || DOT.info}"></span>
-        <span class="title">${esc(c.title)}</span><span class="src">${srcLine(c)}</span>
-        <span class="x" data-dismiss title="Ignorer">✕</span></div>
+        <span class="title">${esc(c.title)}</span><span class="src">${srcLine(c)}</span></div>
+      <button class="x" data-dismiss title="Fermer" aria-label="Fermer"><svg width="8" height="8" viewBox="0 0 8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M1 1l6 6M7 1L1 7"/></svg></button>
       ${c.body ? `<div class="body">${esc(c.body)}</div>` : ""}
       ${c.html ? `<div class="custom"></div>` : ""}
       ${hasDetails ? `<details ${opened.has(c.key) ? "open" : ""}><summary>${esc(c.detailsLabel || "Détails")}</summary>
