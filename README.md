@@ -46,6 +46,7 @@ devnotify ask '{"title": "Apply the migration?", "actions": [{"label": "Yes"}, {
 | `actions` | Buttons, see below. The first one is the primary button. |
 | `reply` | A free-text reply right of the buttons: `{argv, placeholder, label, keep, open}`; `{text}` in `argv` is replaced by the reply. It folds behind a "Répondre…" button that slides open into a field; it starts open when the card has no button or says `"open": true`, and folds back on Esc or when left empty. An `ask` card always has one (`"reply": false` removes it); its reply is the answer. |
 | `until` | argv started with the card; the card goes away when it exits (an `ask` answers `{"closed": "resolved"}`). |
+| `urgent` | Shows even under a Focus (see below). |
 
 An action is `{label, argv?, url?, activate?, keep?}`: it runs `argv`, opens `url`, then brings the
 app with bundle id `activate` forward. The card goes away once the command succeeded, unless `keep`;
@@ -78,9 +79,25 @@ A Unix socket at `$TMPDIR/devnotify/sock` (`DEVNOTIFY_DIR` overrides the folder)
 the server also checks that the peer is the same user. One JSON object per line. A message with
 `"wait": true` keeps its connection open and receives one JSON line, the answer.
 
+## Screen sharing and Focus
+
+The panel is left out of screen sharing and recordings (`NSWindow.sharingType = .none`): the person at
+the screen sees the cards, a Zoom call does not. While a Focus (Do Not Disturb, Work…) is on, only
+`urgent` cards show; the others wait behind the bell (crossed out) until it ends or the person opens
+them from the menu. macOS gives no public API for the Focus outside a signed app, so devnotify reads
+`~/Library/DoNotDisturb/DB/Assertions.json`, an undocumented file.
+
 ## Herdr
 
 `make herdr` installs `devnotify-herdr-until` and the `my-toast` mod (`~/.config/herdr-app/mods/my-toast`):
 Herdr's notifications become cards that go to the agent or peek at it, unfold into its last terminal
 lines, send a free reply with `hc send`, and go away once the agent is dealt with (looked at, new turn,
 unblocked or ended). Without devnotify, the mod falls back to terminal-notifier, then to the in-window toast.
+Cards of blocked agents are `urgent`.
+
+## omp
+
+`make omp` installs `devnotify-ask.ts` into `~/.omp/agent/extensions`: in new omp sessions, the agent's
+`ask` also shows as a card (one button per option, and a free reply), and the first answer wins, in the
+terminal or on the card. It shadows the built-in `ask` with its own description and schema, so it follows
+both the older `questions` tool and the newer HTML form.

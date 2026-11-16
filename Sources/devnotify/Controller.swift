@@ -18,6 +18,9 @@ final class Controller: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
     private var waiters: [String: Client] = [:]
     /// `until` commands, by card key: the card goes away when its command exits.
     private var watchers: [String: Process] = [:]
+    /// A Focus is on (see `shown`), and whether the person opened the muted cards anyway.
+    private var focused = false
+    private var revealed = false
     private var hidden = false
     private var pageReady = false
     private let width: CGFloat = 400
@@ -34,6 +37,8 @@ final class Controller: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
         p.hasShadow = false
         p.hidesOnDeactivate = false
         p.isFloatingPanel = true
+        // Out of screen sharing and recordings: the cards stay for the person at the screen only.
+        p.sharingType = .none
         p.becomesKeyOnlyIfNeeded = true
         p.contentView = web
         return p
@@ -56,7 +61,23 @@ final class Controller: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
         refreshMenu()
         NotificationCenter.default.addObserver(forName: NSColor.systemColorsDidChangeNotification, object: nil,
                                                queue: .main) { [weak self] _ in self?.pushAccent() }
+        Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in self?.checkFocus() }
+        checkFocus()
         return true
+    }
+
+    /// Under a Focus, only urgent cards show; the rest wait behind the bell until it ends
+    /// (or the person opens them from the menu).
+    private func checkFocus() {
+        let active = focusActive()
+        guard active != focused else { return }
+        focused = active
+        revealed = false
+        render()
+    }
+
+    private var shown: [[String: Any]] {
+        focused && !revealed ? cards.filter { $0["urgent"] as? Bool == true } : cards
     }
 
     // MARK: Messages from the socket
@@ -118,14 +139,14 @@ final class Controller: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
     private func render() {
         refreshMenu()
         guard pageReady,
-              let data = try? JSONSerialization.data(withJSONObject: cards),
+              let data = try? JSONSerialization.data(withJSONObject: shown),
               let json = String(data: data, encoding: .utf8) else { return }
         web.evaluateJavaScript("render(\(json))")
         layoutPanel()
     }
 
     private func layoutPanel() {
-        guard !cards.isEmpty, !hidden else { panel.orderOut(nil); return }
+        guard !shown.isEmpty, !hidden else { panel.orderOut(nil); return }
         let mouse = NSEvent.mouseLocation
         guard let screen = NSScreen.screens.first(where: { NSMouseInRect(mouse, $0.frame, false) }) ?? NSScreen.main else { return }
         let vf = screen.visibleFrame
@@ -223,8 +244,8 @@ final class Controller: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
     private func refreshMenu() {
         statusItem.button?.title = cards.isEmpty ? "" : " \(cards.count)"
         statusItem.button?.imagePosition = .imageLeft
-        statusItem.button?.image = NSImage(systemSymbolName: cards.isEmpty ? "bell" : "bell.badge",
-                                           accessibilityDescription: "devnotify")
+        let symbol = focused ? (cards.isEmpty ? "bell.slash" : "bell.slash.fill") : (cards.isEmpty ? "bell" : "bell.badge")
+        statusItem.button?.image = NSImage(systemSymbolName: symbol, accessibilityDescription: "devnotify")
         let menu = NSMenu()
         if cards.isEmpty {
             menu.addItem(NSMenuItem(title: "Aucune notification", action: nil, keyEquivalent: ""))
@@ -235,7 +256,7 @@ final class Controller: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
             menu.addItem(item)
         }
         menu.addItem(.separator())
-        let toggle = NSMenuItem(title: hidden ? "Afficher les cartes" : "Masquer les cartes",
+        let toggle = NSMenuItem(title: hidden || shown.count < cards.count ? "Afficher les cartes" : "Masquer les cartes",
                                 action: #selector(toggleCards), keyEquivalent: "")
         toggle.target = self
         menu.addItem(toggle)
@@ -246,8 +267,11 @@ final class Controller: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
         statusItem.menu = menu
     }
 
-    @objc private func showCards() { hidden = false; render() }
-    @objc private func toggleCards() { hidden.toggle(); render() }
+    @objc private func showCards() { hidden = false; revealed = true; render() }
+    @objc private func toggleCards() {
+        if hidden || (focused && !revealed) { hidden = false; revealed = true } else { hidden = true }
+        render()
+    }
     @objc private func clearAll() {
         for key in Array(waiters.keys) { settle(key, ["closed": "dismissed"]) }
         for key in Array(watchers.keys) { unwatch(key) }

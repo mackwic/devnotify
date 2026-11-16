@@ -5,7 +5,7 @@
 
 import { View, div } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
-import { props, closeOverlay, run, theme, exec, home, checking } from "herdr";
+import { props, closeOverlay, run, theme, exec, home, checking, agents } from "herdr";
 
 const NOTIFIER = "/opt/homebrew/bin/terminal-notifier";
 const HERDR_BUNDLE = "dev.herdr.app";
@@ -24,6 +24,8 @@ function card(p) {
     level: p.level ?? "info",
     title: p.title ?? "",
     body: p.body || undefined,
+    // A blocked agent waits on the person: it shows even under a Focus.
+    urgent: agents().some((a) => a.address === terminal && a.status === "blocked"),
     actions: [],
   };
   if (p.action?.name) {
